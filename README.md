@@ -1,198 +1,146 @@
 # Inventory & Order Management System
 
-A full-stack web application for managing products, customers, and orders. Built with FastAPI, React, and PostgreSQL.
+A full-stack CRUD app for managing products, customers, and orders. Backend is FastAPI, frontend is React, database is PostgreSQL. No auth, no nonsense — just the basics done reasonably well.
 
-## Tech Stack
+## Tech stack
 
-| Layer       | Technology                                                    |
-|-------------|---------------------------------------------------------------|
-| Backend     | Python 3.11, FastAPI, SQLAlchemy, Pydantic, Alembic, Uvicorn |
-| Frontend    | React 18, Vite, React Router 6, Axios, react-hot-toast       |
-| Database    | PostgreSQL 15                                                 |
-| Containers  | Docker, Docker Compose                                        |
+| Layer       | What it uses                                                                       |
+|-------------|------------------------------------------------------------------------------------|
+| Backend     | Python 3.11, FastAPI, SQLAlchemy (ORM), Pydantic (validation), Uvicorn             |
+| Frontend    | React 18, Vite, React Router 6, Axios, react-hot-toast                             |
+| Database    | PostgreSQL 15                                                                      |
+| Containers  | Docker Compose                                                                     |
 
 ---
 
-## Quick Start (Docker)
+## Quick start — Docker way
 
 ```bash
-# Clone the repo
 git clone https://github.com/yourusername/inventory-order-system.git
 cd inventory-order-system
-
-# Run everything with one command
 docker-compose up --build
 ```
 
-| Service    | URL                     |
-|------------|-------------------------|
-| Frontend   | http://localhost:3000    |
-| Backend    | http://localhost:8000    |
+Once it's all running:
+
+| Service    | URL                      |
+|------------|--------------------------|
+| Frontend   | http://localhost:3000     |
+| Backend    | http://localhost:8000     |
 | Swagger    | http://localhost:8000/docs |
 
-Seed data (5 products, 2 customers) is inserted automatically on first startup.
+On first startup, the backend spawns a background thread that seeds the database with 5 products and 2 customers (but only if the tables are empty, so restarting won't duplicate stuff). The API is available immediately — seeding happens in parallel.
 
 ---
 
-## Local Development (without Docker)
+## Local development (no Docker)
 
 ### Backend
 
-**Prerequisites:** Python 3.11+, PostgreSQL running locally with database `inventory_db` created.
+You'll need Python 3.11+ and PostgreSQL running locally with a database called `inventory_db`.
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
 
-# Activate it
-# Windows (PowerShell):
+# PowerShell:
 .\venv\Scripts\Activate.ps1
-# macOS / Linux:
+# macOS/Linux:
 # source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
 cp .env.example .env
-# Edit .env and set DATABASE_URL for your local PostgreSQL
-
-# Seed data (optional - runs automatically on first startup)
-python seed.py
-
-# Start the server
+# Edit .env — set DATABASE_URL to point at your local Postgres
 uvicorn main:app --reload --port 8000
 ```
 
-### Frontend
+Seed data gets auto-inserted on first startup, but you can also run `python seed.py` manually if you want.
 
-**Prerequisites:** Node.js 18+
+### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Configure environment
 cp .env.example .env
-# Edit .env and set VITE_API_URL=http://localhost:8000
-
-# Start dev server
+# Set VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
-### Verify It Works
+### Smoke test
 
-1. Open http://localhost:3000 — Dashboard shows 5 products, 2 customers
-2. Navigate to **Products** — seed data visible, try Add/Edit/Delete
-3. Navigate to **Customers** — John Doe and Jane Smith visible
-4. Navigate to **Orders** → **Create Order** — select customer, add items, place order
-5. Check **Orders** list — order appears with correct total
-6. Try duplicate SKU → *"SKU already exists"*
-7. Try ordering > available stock → *"Insufficient stock"*
+1. Open http://localhost:3000 — dashboard shows 5 products, 2 customers, and any orders
+2. **Products** — CRUD works, try adding/editing/deleting. Duplicate SKU? Blocked.
+3. **Customers** — John Doe and Jane Smith are there. Emails must be unique.
+4. **Orders** → **Create Order** — pick a customer, add items, place the order. Stock gets deducted automatically.
+5. Try ordering more than available stock — you'll get an error.
+6. Total is calculated server-side. The frontend shows a running total for preview, but the backend is the source of truth.
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 inventory-order-system/
 ├── backend/
 │   ├── routes/
-│   │   ├── __init__.py
-│   │   ├── products.py        # Product CRUD endpoints
-│   │   ├── customers.py       # Customer CRUD endpoints
-│   │   └── orders.py          # Order endpoints with business logic
-│   ├── main.py                # FastAPI app entry point
-│   ├── models.py              # SQLAlchemy database models
-│   ├── schemas.py             # Pydantic request/response schemas
-│   ├── database.py            # Database connection & session
-│   ├── seed.py                # Seed data script
-│   ├── requirements.txt       # Python dependencies
-│   ├── Dockerfile             # Multi-stage build (optional)
-│   ├── .env.example           # Environment template
-│   └── .env                   # Local environment (gitignored)
+│   │   ├── products.py           # Product CRUD — SKU uniqueness, negative value checks
+│   │   ├── customers.py          # Customer CRUD — email uniqueness
+│   │   └── orders.py             # Order creation — stock checks, deduction, total calc
+│   ├── main.py                   # FastAPI entry point + background seed thread
+│   ├── models.py                 # SQLAlchemy: Product, Customer, Order, OrderItem
+│   ├── schemas.py                # Pydantic: request/response models with from_attributes
+│   ├── database.py               # SessionLocal, engine, get_db dependency
+│   ├── seed.py                   # Seed script (also runs as background thread on startup)
+│   ├── requirements.txt          # Includes alembic but no migrations exist (uses create_all)
+│   ├── Dockerfile                # python:3.11-slim
+│   ├── .env.example
+│   └── .env                      (gitignored)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Navbar.jsx     # Responsive navigation bar
-│   │   │   └── Navbar.css
+│   │   │   └── Sidebar.jsx       # Fixed sidebar, collapsible on mobile, nav links
 │   │   ├── pages/
-│   │   │   ├── Dashboard.jsx  # Stats overview cards
-│   │   │   ├── Products.jsx   # Product management (CRUD)
-│   │   │   ├── Customers.jsx  # Customer management (CRUD)
-│   │   │   ├── Orders.jsx     # Order list with search
-│   │   │   ├── OrderDetail.jsx # Single order view
-│   │   │   └── CreateOrder.jsx # Order creation form
+│   │   │   ├── Dashboard.jsx     # Stats cards + quick actions + recent orders
+│   │   │   ├── Products.jsx      # Table + search + add/edit/delete modals
+│   │   │   ├── Customers.jsx     # Table + search + add/edit/delete modals
+│   │   │   ├── Orders.jsx        # Order list (item count shows '-' — known bug)
+│   │   │   ├── OrderDetail.jsx   # Single order view with items table
+│   │   │   └── CreateOrder.jsx   # Customer select + dynamic item rows + place order
 │   │   ├── services/
-│   │   │   └── api.js         # Axios API client
-│   │   ├── App.jsx            # Router setup
-│   │   ├── App.css            # Design system & responsive styles
-│   │   └── main.jsx           # App entry point
-│   ├── public/
-│   ├── index.html
+│   │   │   └── api.js            # Axios client, all endpoints
+│   │   ├── App.jsx               # Router setup with sidebar + content layout
+│   │   ├── App.css               # Full design system — variables, responsive, animations
+│   │   └── main.jsx              # BrowserRouter + Toaster wrapper
+│   ├── Dockerfile                # Multi-stage: Node build → Nginx serve
 │   ├── package.json
-│   ├── vite.config.js
-│   ├── Dockerfile             # Nginx production build
-│   ├── .env.example           # Environment template
-│   └── .env                   # Local environment (gitignored)
-├── docker-compose.yml         # Orchestrates all 3 services
-├── .env.example               # All environment variables reference
-├── .gitignore
-└── README.md
+│   ├── vite.config.js            # Port 3000, host: true
+│   └── index.html
+├── docker-compose.yml            # db (Postgres 15 Alpine) + backend + frontend
+├── .env.example
+└── .gitignore
 ```
 
 ---
 
-## Environment Variables
-
-### Backend (`backend/.env` or docker-compose)
-
-| Variable       | Required | Default                                                          | Description                     |
-|----------------|----------|------------------------------------------------------------------|---------------------------------|
-| `DATABASE_URL` | Yes      | `postgresql://postgres:postgres@db:5432/inventory_db`            | PostgreSQL connection string    |
-
-Connection string examples:
-- **Local Docker:** `postgresql://postgres:postgres@db:5432/inventory_db`
-- **Local manual:**  `postgresql://postgres:postgres@localhost:5432/inventory_db`
-- **Neon:**          `postgresql://neondb_owner:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
-- **Render:**        `postgresql://user:password@host:5432/dbname`
-
-### Frontend (`frontend/.env` or build env)
-
-| Variable       | Required | Default                   | Description                 |
-|----------------|----------|---------------------------|-----------------------------|
-| `VITE_API_URL` | Yes      | `http://localhost:8000`   | Backend API base URL        |
-
-Examples:
-- **Local:** `http://localhost:8000`
-- **Render:** `https://your-app.onrender.com`
-- **Railway:** `https://your-app.up.railway.app`
-
----
-
-## API Endpoints
+## API endpoints
 
 ### Products
 | Method   | Endpoint                 | Description        |
 |----------|--------------------------|--------------------|
 | `GET`    | `/api/products/`         | List all products  |
-| `GET`    | `/api/products/{id}`     | Get product by ID  |
-| `POST`   | `/api/products/`         | Create a product   |
-| `PUT`    | `/api/products/{id}`     | Update a product   |
-| `DELETE` | `/api/products/{id}`     | Delete a product   |
+| `GET`    | `/api/products/{id}`     | Get one            |
+| `POST`   | `/api/products/`         | Create             |
+| `PUT`    | `/api/products/{id}`     | Update             |
+| `DELETE` | `/api/products/{id}`     | Delete             |
 
 ### Customers
 | Method   | Endpoint                  | Description         |
 |----------|---------------------------|---------------------|
 | `GET`    | `/api/customers/`         | List all customers  |
-| `GET`    | `/api/customers/{id}`     | Get customer by ID  |
-| `POST`   | `/api/customers/`         | Create a customer   |
-| `PUT`    | `/api/customers/{id}`     | Update a customer   |
-| `DELETE` | `/api/customers/{id}`     | Delete a customer   |
+| `GET`    | `/api/customers/{id}`     | Get one             |
+| `POST`   | `/api/customers/`         | Create              |
+| `PUT`    | `/api/customers/{id}`     | Update              |
+| `DELETE` | `/api/customers/{id}`     | Delete              |
 
 ### Orders
 | Method   | Endpoint              | Description         |
@@ -201,7 +149,8 @@ Examples:
 | `GET`    | `/api/orders/{id}`    | Get order details   |
 | `POST`   | `/api/orders/`        | Create an order     |
 
-### Order Creation Request
+### Creating an order
+
 ```json
 {
   "customer_id": 1,
@@ -214,155 +163,60 @@ Examples:
 
 ---
 
-## Business Rules
+## Environment variables
 
-These rules are enforced by the backend:
+### Backend
 
-1. **Unique SKU** — Product SKU must be unique. Returns `{"message": "SKU already exists"}` (HTTP 400).
-2. **Unique Email** — Customer email must be unique. Returns `{"message": "Email already exists"}` (HTTP 400).
-3. **Stock Validation** — Before creating an order, the backend checks `quantity <= stock`. Returns `{"message": "Insufficient stock"}` (HTTP 400).
-4. **Automatic Stock Deduction** — When an order is created, `stock = stock - quantity` is applied automatically.
-5. **Total Calculation** — Subtotal = `quantity × unit_price`. Order total = sum of all subtotals. The frontend never calculates totals.
+| Variable       | Required | Default                                                          |
+|----------------|----------|------------------------------------------------------------------|
+| `DATABASE_URL` | Yes      | `postgresql://postgres:postgres@db:5432/inventory_db`            |
 
----
+Connection string patterns:
+- **Docker:** `postgresql://postgres:postgres@db:5432/inventory_db`
+- **Local:**  `postgresql://postgres:postgres@localhost:5432/inventory_db`
+- **Neon:**   `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
+- **Render:** `postgresql://user:password@host:5432/dbname`
 
-## Docker Instructions
+### Frontend
 
-### Build & Run
-
-```bash
-# Build and start all services
-docker-compose up --build
-
-# Run in background
-docker-compose up --build -d
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-
-# Stop and delete volumes (reset database)
-docker-compose down -v
-```
-
-### Service Details
-
-| Service  | Dockerfile          | Base Image         | Port  |
-|----------|---------------------|--------------------|-------|
-| `db`     | (official image)    | postgres:15-alpine | 5432  |
-| `backend`| `backend/Dockerfile`| python:3.11-slim   | 8000  |
-| `frontend`| `frontend/Dockerfile`| node:18-alpine → nginx:alpine | 3000 → 80 |
-
-The frontend Dockerfile uses a multi-stage build:
-1. **Build stage** — Compiles React app with Vite
-2. **Production stage** — Serves static files via Nginx on port 80 (mapped to host 3000)
+| Variable       | Required | Default                   |
+|----------------|----------|---------------------------|
+| `VITE_API_URL` | Yes      | `http://localhost:8000`   |
 
 ---
 
-## Deployment Guides
+## How orders work (the interesting bit)
 
-### Option 1: Deploy to Render (Backend) + Vercel (Frontend) + Neon (Database)
+1. Validates the customer exists (404 if not)
+2. For each item: checks the product exists, then verifies `quantity <= stock`
+3. Snapshots the current `unit_price` from the product (so historical orders keep their prices even if prices change later)
+4. Pre-calculates subtotals and the order total
+5. Uses `db.flush()` to get the order ID before inserting items
+6. Deducts stock for each item
+7. Commits everything in one transaction
 
-#### Database — Neon PostgreSQL (Free)
+There's a subtle race condition here — between checking stock and deducting it, another request could read the same value. Fine for single-server use, but if you're running this at scale you'd want `SELECT ... FOR UPDATE` or optimistic locking.
 
-1. Go to https://neon.tech and sign up
-2. Create a new project, copy the connection string
-3. It looks like: `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
-
-#### Backend — Render
-
-1. Push your code to GitHub
-2. Go to https://render.com → **New** → **Web Service**
-3. Connect your repo, set:
-   - **Name:** `inventory-backend`
-   - **Root Directory:** `backend`
-   - **Runtime:** `Python 3`
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port 8000`
-4. Add environment variable:
-   - `DATABASE_URL` = your Neon connection string
-5. Deploy
-6. Note your backend URL: `https://inventory-backend.onrender.com`
-
-#### Frontend — Vercel
-
-1. Install Vercel CLI or use the GitHub integration
-2. Go to https://vercel.com → **Add New** → **Project**
-3. Connect your repo, set:
-   - **Root Directory:** `frontend`
-   - **Framework Preset:** `Vite`
-   - **Build Command:** `npm run build`
-   - **Output Directory:** `dist`
-4. Add environment variable:
-   - `VITE_API_URL` = your Render backend URL (e.g. `https://inventory-backend.onrender.com`)
-5. Deploy
-6. Your frontend is live at `https://your-app.vercel.app`
+Prices are captured at order time in the `order_items` table, not read live from the products table. This means if you change a product's price later, existing orders still show what was actually charged.
 
 ---
 
-### Option 2: Deploy to Railway (All-in-One)
+## Business rules enforced by the backend
 
-1. Push your code to GitHub
-2. Go to https://railway.app → **New Project** → **Deploy from GitHub**
-3. Select your repo
-4. Click **New** → **Database** → **Add PostgreSQL** (Railway provisions a DB automatically)
-5. Click **New** → **Deploy** for the backend service:
-   - **Root Directory:** `backend`
-   - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - Railway auto-injects `DATABASE_URL` from the PostgreSQL plugin
-6. Click **New** → **Deploy** for the frontend service:
-   - **Root Directory:** `frontend`
-   - **Build Command:** `npm run build`
-   - **Start Command:** `npx serve dist -l $PORT`
-   - Add `VITE_API_URL` pointing to your backend URL
-7. All services are connected and deployed
+| Rule                           | What happens                                      |
+|--------------------------------|---------------------------------------------------|
+| Duplicate SKU                  | 400 — `"SKU already exists"`                      |
+| Duplicate email                | 400 — `"Email already exists"`                    |
+| Overselling                    | 400 — `"Insufficient stock"`                      |
+| Negative price or stock        | 400 — rejects it                                  |
+| Missing customer or product    | 404 — tells you what's missing                    |
+| Order not found                | 404 — `"Order not found"`                         |
 
 ---
 
-### Option 3: Deploy to Netlify (Frontend) + Railway (Backend)
+## Seed data
 
-#### Backend on Railway
-Follow steps in Option 2 for the backend only.
-
-#### Frontend on Netlify
-
-1. Push your code to GitHub
-2. Go to https://netlify.com → **Add new site** → **Import from Git**
-3. Connect your repo, set:
-   - **Base directory:** `frontend`
-   - **Build command:** `npm run build`
-   - **Publish directory:** `dist`
-4. Add environment variable:
-   - `VITE_API_URL` = your Railway backend URL
-5. Deploy
-
----
-
-### Docker Deployment (Any Cloud VM)
-
-For DigitalOcean, AWS EC2, Linode, etc.:
-
-```bash
-# SSH into your VM
-git clone https://github.com/yourusername/inventory-order-system.git
-cd inventory-order-system
-
-# Set production database URL (e.g., Neon PostgreSQL)
-export DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-
-# Run with Docker
-docker-compose up --build -d
-```
-
-Your app is now accessible at `http://your-vm-ip:3000`.
-
----
-
-## Seed Data
-
-The application automatically inserts sample data on first startup (when the products/customers tables are empty):
+Auto-inserted on first startup (when the products or customers tables are empty):
 
 ### Products
 | Name        | SKU    | Price  | Stock |
@@ -381,26 +235,87 @@ The application automatically inserts sample data on first startup (when the pro
 
 ---
 
-## API Error Responses
+## CSS / design system notes
 
-| Scenario                 | Status Code | Response                          |
-|--------------------------|-------------|-----------------------------------|
-| Duplicate SKU            | 400         | `{"message": "SKU already exists"}` |
-| Duplicate Email          | 400         | `{"message": "Email already exists"}` |
-| Insufficient Stock       | 400         | `{"message": "Insufficient stock"}` |
-| Product Not Found        | 404         | `{"detail": "Product not found"}` |
-| Customer Not Found       | 404         | `{"detail": "Customer not found"}` |
-| Negative Price/Stock     | 400         | `{"detail": "Price cannot be negative"}` |
+The frontend has a decent design system built with CSS custom properties. Violet (`#7c3aed`) is the primary color, with a full palette of status colors (emerald, amber, red, indigo, cyan). There's a 6-tier shadow scale, Inter font from Google Fonts, and responsive breakpoints at 768px and 640px.
+
+Minor quirk: the CSS references `--radius`, `--radius-sm`, `--radius-lg`, `--radius-xl` variables that are used but never actually defined in `:root`. They fall through to `initial`, which in practice means `0` — so nothing is rounded except via hardcoded values. Easy fix if you care about rounded corners.
+
+The sidebar is fixed at 240px on desktop, slides off-screen on mobile with a hamburger toggle. Tables transform into card-like layouts on small screens using `data-label` attributes.
 
 ---
 
-## Troubleshooting
+## Docker commands
 
-| Problem                          | Solution                                                       |
-|----------------------------------|----------------------------------------------------------------|
-| `port already allocated`         | Change ports in `docker-compose.yml` (e.g., `8001:8000`)       |
-| Backend can't connect to DB      | Wait for PostgreSQL to fully start (healthcheck ensures this)  |
-| Frontend shows blank page        | Check browser console for CORS or API URL issues               |
-| `VITE_API_URL` not working       | Ensure it's set **before** building (`npm run build`)          |
-| Seed data not appearing          | Stop containers with `docker-compose down -v` to reset volume  |
-| Docker build fails               | Run `docker-compose build --no-cache` to clear cache           |
+```bash
+docker-compose up --build        # Build + start
+docker-compose up --build -d     # Run in background
+docker-compose logs -f           # Watch logs
+docker-compose down              # Stop everything
+docker-compose down -v           # Stop + wipe database volume
+```
+
+The backend waits for Postgres to be healthy before starting (healthcheck via `pg_isready`). Frontend doesn't wait for backend — it'll start immediately and just show errors until the backend is ready.
+
+---
+
+## Deployment
+
+### Option 1: Render (backend) + Vercel (frontend) + Neon (database)
+
+**Database** — Sign up at https://neon.tech, create a project, grab the connection string.
+
+**Backend** — https://render.com → New Web Service:
+- Root directory: `backend`
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn main:app --host 0.0.0.0 --port 8000`
+- Env: `DATABASE_URL` = your Neon string
+
+**Frontend** — https://vercel.com → New Project:
+- Root directory: `frontend`
+- Framework: Vite
+- Env: `VITE_API_URL` = your Render backend URL
+
+### Option 2: Railway (all-in-one)
+
+https://railway.app → New Project → Deploy from GitHub. Add a PostgreSQL plugin (Railway auto-injects `DATABASE_URL`). Add backend and frontend as separate services.
+
+### Option 3: Docker on any VM
+
+```bash
+git clone <repo>
+cd inventory-order-system
+export DATABASE_URL=postgresql://user:password@host:5432/dbname
+docker-compose up --build -d
+```
+
+---
+
+## Things to know / rough edges
+
+- **No authentication** — the API is wide open. Don't put this on the public internet without adding auth.
+- **CORS is wide open** (`allow_origins=["*"]`). Fine for dev, lock it down for production.
+- **No cascade deletes** — deleting a customer who has orders will give you a foreign key error. Same for products referenced in orders.
+- **Alembic is in requirements.txt but there are no migrations** — the project uses `Base.metadata.create_all()` directly. Schema changes mean dropping tables or running manual SQL.
+- **`sku` has no max_length validation** in Pydantic — the DB column is `String(100)`, so anything over 100 characters will get truncated or error.
+- **Order list shows `-` for item count** — the frontend tries to display `item_count` but the backend doesn't return it. Minor display bug.
+- **Duplicate SKU/email and stock errors return nested JSON** (`{"detail": {"message": "..."}}`), but negative value and not-found errors return flat strings (`{"detail": "..."}`). The frontend handles both, but it's inconsistent.
+- **Error responses** for duplicate SKU/email use `message` key while other errors use `detail` directly. No real standard here.
+- **Phone numbers** are stored as plain strings with no formatting.
+
+---
+
+## What I'd add next
+
+- Auth (JWT or session-based)
+- Pagination on lists (the API returns everything right now)
+- Proper Alembic migrations
+- `SELECT ... FOR UPDATE` on stock checks for safety
+- Cascade deletes or soft deletes
+- Order status tracking (pending, shipped, etc.)
+- File uploads for product images
+- Unit tests (there are none right now)
+
+---
+
+*Built with Python, React, and probably too much coffee.*

@@ -24,24 +24,6 @@ Full-stack CRUD app for managing products, customers, and orders. FastAPI + Reac
 
 ---
 
-## Quick start (Docker)
-
-```bash
-git clone https://github.com/yourusername/inventory-order-system.git
-cd inventory-order-system
-docker-compose up --build
-```
-
-| Service    | URL                      |
-|------------|--------------------------|
-| Frontend   | http://localhost:3000     |
-| Backend    | http://localhost:8000     |
-| Swagger    | http://localhost:8000/docs |
-
-On first startup a background thread seeds 5 products and 2 customers (only if tables are empty). API is available immediately.
-
----
-
 ## Local development
 
 ### Backend

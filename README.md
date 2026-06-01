@@ -317,5 +317,3 @@ docker-compose up --build -d
 - Unit tests (there are none right now)
 
 ---
-
-*Built with Python, React, and probably too much coffee.*

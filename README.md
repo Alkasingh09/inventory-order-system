@@ -1,6 +1,17 @@
 # Inventory & Order Management System
 
-Full-stack CRUD app for products, customers, and orders. FastAPI + React + PostgreSQL. No auth.
+Full-stack CRUD app for managing products, customers, and orders. FastAPI + React + PostgreSQL. No auth.
+
+## Features
+
+- Product management (name, SKU, price, stock quantity)
+- Customer management (name, email, phone)
+- Order creation with line items and automatic stock deduction
+- Server-side total calculation and price snapshotting
+- Seed data on first startup (background thread)
+- Responsive UI with CSS custom property design system
+- Docker Compose for one-command setup
+- Swagger docs at `/docs`
 
 ## Tech stack
 
@@ -101,15 +112,12 @@ inventory-order-system/
 │   │   │   └── CreateOrder.jsx
 │   │   ├── services/
 │   │   │   └── api.js         # Axios client
-│   │   ├── App.jsx            # Router
-│   │   ├── App.css            # Full design system
+│   │   ├── App.jsx            # Router + layout
+│   │   ├── App.css            # Design system, responsive, animations
 │   │   └── main.jsx           # Entry point
-│   ├── public/
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.js
 │   ├── Dockerfile             # Multi-stage: Node build → Nginx
-│   └── .env.example
+│   ├── package.json
+│   └── vite.config.js
 ├── docker-compose.yml
 ├── .env.example
 └── .gitignore
@@ -117,43 +125,97 @@ inventory-order-system/
 
 ---
 
+## Database models
+
+### `products`
+| Column          | Type          | Constraints               |
+|-----------------|---------------|---------------------------|
+| `id`            | Integer       | PK, indexed               |
+| `name`          | String(255)   | NOT NULL                  |
+| `sku`           | String(100)   | UNIQUE, NOT NULL, indexed |
+| `price`         | Float         | NOT NULL                  |
+| `stock_quantity`| Integer       | NOT NULL, default 0       |
+| `created_at`    | DateTime      | auto                       |
+| `updated_at`    | DateTime      | auto                       |
+
+### `customers`
+| Column       | Type          | Constraints               |
+|--------------|---------------|---------------------------|
+| `id`         | Integer       | PK, indexed               |
+| `name`       | String(255)   | NOT NULL                  |
+| `email`      | String(255)   | UNIQUE, NOT NULL, indexed |
+| `phone`      | String(50)    | nullable                  |
+| `created_at` | DateTime      | auto                       |
+| `updated_at` | DateTime      | auto                       |
+
+### `orders`
+| Column         | Type      | Constraints                              |
+|----------------|-----------|------------------------------------------|
+| `id`           | Integer   | PK, indexed                              |
+| `customer_id`  | Integer   | FK → customers.id, NOT NULL              |
+| `total_amount` | Float     | NOT NULL, default 0.0                    |
+| `created_at`   | DateTime  | auto                                     |
+
+### `order_items`
+| Column       | Type      | Constraints                   |
+|--------------|-----------|-------------------------------|
+| `id`         | Integer   | PK, indexed                   |
+| `order_id`   | Integer   | FK → orders.id, NOT NULL      |
+| `product_id` | Integer   | FK → products.id, NOT NULL    |
+| `quantity`   | Integer   | NOT NULL                      |
+| `unit_price` | Float     | NOT NULL (snapshotted)        |
+| `subtotal`   | Float     | NOT NULL                      |
+
+No cascade deletes are configured.
+
+---
+
 ## API
 
 ### Products
-| Method   | Endpoint                 | Description        |
-|----------|--------------------------|--------------------|
-| `GET`    | `/api/products/`         | List all           |
-| `GET`    | `/api/products/{id}`     | Get by ID          |
-| `POST`   | `/api/products/`         | Create             |
-| `PUT`    | `/api/products/{id}`     | Update             |
-| `DELETE` | `/api/products/{id}`     | Delete             |
+
+**Request schemas:**
+- POST `/api/products/` — `{"name": string, "sku": string, "price": float, "stock_quantity": int}`
+- PUT `/api/products/{id}` — same fields, all optional
+
+**Response:** `{"id": int, "name": string, "sku": string, "price": float, "stock_quantity": int, "created_at": datetime, "updated_at": datetime}`
+
+| Method   | Endpoint                 | Status codes     |
+|----------|--------------------------|------------------|
+| `GET`    | `/api/products/`         | 200              |
+| `GET`    | `/api/products/{id}`     | 200, 404         |
+| `POST`   | `/api/products/`         | 201, 400, 422    |
+| `PUT`    | `/api/products/{id}`     | 200, 400, 404    |
+| `DELETE` | `/api/products/{id}`     | 204, 404         |
 
 ### Customers
-| Method   | Endpoint                  | Description         |
-|----------|---------------------------|---------------------|
-| `GET`    | `/api/customers/`         | List all            |
-| `GET`    | `/api/customers/{id}`     | Get by ID           |
-| `POST`   | `/api/customers/`         | Create              |
-| `PUT`    | `/api/customers/{id}`     | Update              |
-| `DELETE` | `/api/customers/{id}`     | Delete              |
+
+**Request schemas:**
+- POST `/api/customers/` — `{"name": string, "email": string, "phone": string | null}`
+- PUT `/api/customers/{id}` — same fields, all optional
+
+**Response:** `{"id": int, "name": string, "email": string, "phone": string | null, "created_at": datetime, "updated_at": datetime}`
+
+| Method   | Endpoint                  | Status codes     |
+|----------|---------------------------|------------------|
+| `GET`    | `/api/customers/`         | 200              |
+| `GET`    | `/api/customers/{id}`     | 200, 404         |
+| `POST`   | `/api/customers/`         | 201, 400, 422    |
+| `PUT`    | `/api/customers/{id}`     | 200, 400, 404    |
+| `DELETE` | `/api/customers/{id}`     | 204, 404         |
 
 ### Orders
-| Method   | Endpoint              | Description         |
+
+**POST request:** `{"customer_id": int, "items": [{"product_id": int, "quantity": int}]}`
+**POST response:** `{"id": int, "customer_id": int, "total_amount": float, "items": [{"product_name": string, "quantity": int, "unit_price": float, "subtotal": float}]}`
+**GET /api/orders/ response:** `[{"id": int, "customer_id": int, "customer_name": string, "total_amount": float, "created_at": datetime}]`
+**GET /api/orders/{id} response:** same as POST response
+
+| Method   | Endpoint              | Status codes        |
 |----------|-----------------------|---------------------|
-| `GET`    | `/api/orders/`        | List all            |
-| `GET`    | `/api/orders/{id}`    | Get details         |
-| `POST`   | `/api/orders/`        | Create              |
-
-### Create order request
-
-```json
-{
-  "customer_id": 1,
-  "items": [
-    { "product_id": 1, "quantity": 2 }
-  ]
-}
-```
+| `GET`    | `/api/orders/`        | 200                 |
+| `GET`    | `/api/orders/{id}`    | 200, 404            |
+| `POST`   | `/api/orders/`        | 201, 400, 404, 422  |
 
 ---
 
@@ -164,8 +226,8 @@ inventory-order-system/
 | Duplicate SKU                  | 400 — `"SKU already exists"`                       |
 | Duplicate email                | 400 — `"Email already exists"`                     |
 | Insufficient stock             | 400 — `"Insufficient stock"`                       |
-| Negative price/stock           | 400 — rejected                                     |
-| Customer/product not found     | 404                                                |
+| Negative price or stock        | 400 — rejected                                     |
+| Customer or product not found  | 404                                                |
 | Order not found                | 404 — `"Order not found"`                          |
 
 ### Order creation flow
@@ -179,6 +241,12 @@ inventory-order-system/
 7. Commits in one transaction
 
 There is a race condition in the stock check — no `SELECT ... FOR UPDATE` or optimistic locking is used.
+
+### Frontend validation
+
+- **Product form:** name and SKU required (non-whitespace), price and stock >= 0
+- **Customer form:** name required, email must match `^[^\s@]+@[^\s@]+\.[^\s@]+$`, phone optional
+- **Order form:** customer required, at least one item, quantity >= 1, quantity cannot exceed stock
 
 ---
 
@@ -198,7 +266,7 @@ There is a race condition in the stock check — no `SELECT ... FOR UPDATE` or o
 
 ---
 
-## Docker commands
+## Docker
 
 ```bash
 docker-compose up --build          # Build + start
@@ -208,7 +276,13 @@ docker-compose down                # Stop
 docker-compose down -v             # Stop + wipe database
 ```
 
-Backend waits for Postgres healthcheck before starting. Frontend starts immediately and shows errors until backend is ready.
+Backend waits for Postgres healthcheck (`pg_isready`) before starting. Frontend starts immediately — shows errors until backend is ready.
+
+| Service  | Dockerfile              | Base Image           | Port  |
+|----------|-------------------------|----------------------|-------|
+| `db`     | official                | postgres:15-alpine   | 5432  |
+| `backend`| `backend/Dockerfile`    | python:3.11-slim     | 8000  |
+| `frontend`| `frontend/Dockerfile`  | node:18-alpine → nginx:alpine | 3000 → 80 |
 
 ---
 
@@ -230,6 +304,16 @@ Inserted automatically on first startup (when tables are empty).
 |-------------|--------------------|------------|
 | John Doe    | john@example.com   | 1234567890 |
 | Jane Smith  | jane@example.com   | 9876543210 |
+
+---
+
+## Frontend design
+
+- CSS custom property design system with full color palette (violet primary, status colors)
+- Inter font from Google Fonts, 6-tier shadow scale
+- Responsive: sidebar collapses on mobile, tables become card layouts via `data-label`
+- Components: sidebar, dashboard, CRUD pages with search + modals, order creation form
+- Toast notifications for errors and success
 
 ---
 
